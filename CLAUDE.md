@@ -7,7 +7,7 @@
 | プロジェクト名 | Accord |
 | GitHub | https://github.com/ieneko1122/Accord |
 | 開発者 | ieneko1122 |
-| 目的 | 練習・試作品 |
+| 目的 | v1.0 リリース（アジャイル開発・TDD） |
 
 ### コンセプト
 > Discord（不和）の対義語。  
@@ -25,7 +25,7 @@
 |------|------|
 | フレームワーク | Spring Boot 3.x |
 | 認証 | Spring Security OAuth2 Client（Discord） |
-| DB | H2（試作用）→ 後でPostgreSQLに移行可 |
+| DB | H2（開発・ローカル用）→ Sprint 5 でデプロイ前に PostgreSQL へ移行 |
 | テスト | JUnit 5 + Mockito + AssertJ |
 | ビルドツール | Gradle |
 | 環境変数 | spring-dotenv（.envファイル） |
@@ -133,11 +133,11 @@ https://discord.com/developers/applications
 - マッチング成立後はDiscordIDを開示してDiscordへ誘導
 
 ### マッチングロジック
-- お互いにいいね → マッチング成立
+- お互いにいいね → マッチング成立（`user1_id = LEAST(a,b)`, `user2_id = GREATEST(a,b)` で正規化）
 - いいね取り消し：マッチング前のみ可能
 - 再いいね：可能
-- マッチング解除：試作品はなし・本番はあり
-- 「Discordで繋がった！」ボタン → matches.is_connected=TRUE → 一覧から消える
+- マッチング解除：v1.0 スコープ外（v2.0 バックログ）
+- 「Discordで繋がった！」ボタン → 押した本人の `user*_connected = TRUE` → 自分側の一覧からのみ消える（相手の一覧は維持）
 
 ### ゲーム検索（目玉機能）
 - IGDB API連携で公式ゲーム名を取得
@@ -171,21 +171,31 @@ https://discord.com/developers/applications
 ## データモデル（テーブル一覧）
 
 ```
-users          : discord_id, last_login_at
-profiles       : username, avatar_url, bio, play_style, party_style, skill_level
+users          : discord_user_id, discord_username, discord_global_name, avatar_hash, last_login_at
+profiles       : user_id, username, bio, play_style, party_style, skill_level
 play_times     : profile_id, time_slot（MORNING/AFTERNOON/NIGHT/LATE_NIGHT）
-games          : igdb_id, name, cover_url（IGDBから取得）
+games          : igdb_id, name, cover_image_id（URL はアプリ側で組み立て）
 profile_games  : profile_id, game_id（中間テーブル）
 likes          : from_user_id, to_user_id
-matches        : user1_id, user2_id, is_connected
+matches        : user1_id, user2_id, user1_connected, user2_connected
 ```
+
+詳細な DDL・制約・カラム定義は `requirements.md § 10` を参照。
+
+---
+
+## 開発方針
+
+- **アジャイル開発**：「練習版→本番作り直し」方式は不採用。各 Sprint の成果物がそのまま v1.0 に積み上がる
+- **TDD**：Service 層はテストファーストで実装する
+- **ブランチ戦略**：feature ブランチ → PR → main マージ
 
 ---
 
 ## 現在の開発状況
 
 ### 完了
-- [x] 要件定義
+- [x] 要件定義（review.md の S/A/B/C 系修正すべて反映済み）
 - [x] GitHubリポジトリ作成
 - [x] Spring Bootバックエンド初期構築
 - [x] Vue 3フロントエンド初期構築
@@ -193,24 +203,36 @@ matches        : user1_id, user2_id, is_connected
 - [x] application.yml設定
 - [x] .env設定
 
-### 次のステップ
-- [ ] Discord OAuthコールバック処理・ユーザー保存
-- [ ] Entityクラス・Repository作成
-- [ ] IGDB APIアカウント登録・動作確認
-- [ ] Vue Router・Piniaの初期設定
-- [ ] 各画面の実装
+### Sprint ロードマップ
+
+| Sprint | ゴール | 主な追加機能 |
+|--------|--------|------------|
+| 1 | Discord ログイン・ログアウト | OAuth、User 保存、Session |
+| 2 | プロフィール登録・編集 | Profile CRUD（ゲームタグなし） |
+| 3 | ユーザー一覧・いいね | 一覧表示（フィルターなし）、いいね送受信 |
+| 4 | マッチング・DiscordID 開示 | マッチング成立ロジック、@username 開示 |
+| 5 | ゲームタグ（IGDB） | IGDB 連携、ゲームタグ追加・絞り込み |
+| 6 | UX 強化 | ページング、未読バッジ、絞り込み拡充 |
+| 7 | デプロイ | PostgreSQL 移行、Render/Railway 配備 |
+
+### 次のステップ（Sprint 1）
+- [ ] Entity クラス作成（User, Profile, Like, Match）※ Game は Sprint 5
+- [ ] Repository インターフェース作成
+- [ ] Discord OAuth コールバック処理・ユーザー保存（Service テストを TDD で先行）
+- [ ] H2 ファイルモード確認（`jdbc:h2:file:./data/accord`）
+- [ ] Vue Router・Pinia の初期設定
 
 ---
 
-## 将来的な拡張（試作品以降）
+## v2.0 バックログ
 
-- プロフィールに長い自己紹介欄
+- プロフィールに長い自己紹介欄（bio 拡張）
 - プロフィール設定の完了率表示
-- ユーザー一覧の並び順変更
+- ユーザー一覧の並び順変更（共通ゲームが多い順など）
 - ブロック機能
 - マッチング解除機能
 - Steam連携
 - 通報機能
 - 検索の関連度スコアリング
-- DB を PostgreSQL に移行
-- デプロイ（Render / Railway など）
+- ゲーム別スキルレベル（profile_games.skill_level）
+- time_slot のタイムゾーン対応
